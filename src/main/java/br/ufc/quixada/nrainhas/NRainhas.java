@@ -3,156 +3,215 @@ package br.ufc.quixada.nrainhas;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
 import java.util.Scanner;
 
-
+/**
+ * Converts NQueens problem into CNF for a particular value of n.
+ * @author mon
+ *
+ */
 public class NRainhas {
-
+	public static int[][] board;
 	public static int n;
-	public static int[] par = new int[2];
-	public static PrintWriter writer;
-	public static ArrayList<String> formulas;
-     
-
+	public static int variables;
+	public static int clauses;
+	public static StringBuilder builder;
+	public static String cnfFileName;
+	
+	
     public static void main(String[] args){
-        try{
-        	if(args.length==1){
-        		n=Integer.parseInt(args[0]);
-        	}
-        	else{
-		    	Scanner scan=new Scanner(System.in);
-		        System.out.println("Entre com o valor de N: ");
-		        n=scan.nextInt();
+    	
+    	Scanner scan=new Scanner(System.in);
+        System.out.println("Entre com o valor de N: ");
+        n=scan.nextInt();
+        scan.close();
+		// init the board
+		board = new int[n][n];
+		// label logical variables on the board
+		labelBoard(n);
+		// init clause builder for cnf
+		builder = new StringBuilder();
+		cnfFileName = n+"rainhas.cnf";
+		generateCNF();
 
-				scan.close();
-        	}
-	        writer=new PrintWriter(n+"rainhas.cnf");
-	        formulas=new ArrayList<String>();
+    }
 
-        	criarFormulas();
-        	escreverArquivo();
+    
 
-		} catch (Exception e) {
-			e.printStackTrace();
+	/**
+	 * Label the board 1..n^2 where n is the desired dimension 
+	 * (size of the problem).
+	 * @param n : size of the problem. 
+	 */
+	public static void labelBoard(int n) {
+		int label = 1;
+		for(int i=0; i<n; i++) {
+			for(int j=0; j<n; j++) {
+				board[i][j] = label;
+				label++;
+			}
 		}
-    }
-
-    private static void criarFormulas() throws Exception{		
-    	linhas();
-    	colunas();
-    	diagonalED();
-    	diagonalDE();
-    }
-    
-    private static void diagonalDE() {
-    	int x=0;
-    	for(int i=n; i>0; i--){
-	    	int[] diagonal=new int[x+1];
-	    	int y=0;
-	    	//4,7,10,13.....3,6,9
-			for(int j=i; j<=n*(x+1); j+=n+1){
-				diagonal[y]=j;	
-				y++;
-			}
-			x++;	
-			addTodasClausulasDaLinha(diagonal, true);
-    	}
-    	int y=n-1;
-    	
-    	for(int i=n+1; i<n*n; i+=n){
-	    	int[] diagonal=new int[y];
-	    	x=0;
-			for(int j=i; j<n*n; j+=n+1){
-				diagonal[x]=j;	
-				x++;
-			}
-			y--;
-			addTodasClausulasDaLinha(diagonal, true);
-    	}
+		variables = --label;
 	}
-    
-	public static void linhas(){
-    	for(int i=0; i<n; i++){
-	    	int[] todaLin=new int[n];
-			for(int j=0;j<n;j++){
-				todaLin[j]=(j+1)+(i*n);
-			}
-			addTodasClausulasDaLinha(todaLin, false);
-    	}
-    }
-    public static void colunas(){
+	/**
+	 * Generates a cnf String corresponding to the problem (with a particular 
+	 * value of n).
+	 * @return: StringBuilder containing cnf.
+	 */
+	public static StringBuilder generateCNF() {
+		generateRowClauses();
+		generateColumnClauses();
+		generateDiagonalClauses();
+		cnfToFile();
+		return builder;
+	}
 
-    	for(int i=1; i<=n; i++){
-	    	int[] todaCol=new int[n];
-			for(int j=0;j<n;j++){
-				todaCol[j]=(j*n)+i;
+	public static  void generateRowClauses() {
+		String clause = "";
+		int[] row = new int[n];
+		int k = 0;
+		for(int i=0; i<n; i++) {
+			// construct statement of form (x1 or x2 or... or xn)
+			for(int j=0; j<n; j++) {
+				row[k] = board[i][j];
+				clause += board[i][j] +" ";
+				k++;
 			}
-			addTodasClausulasDaLinha(todaCol, false);
-    	}
-    }
-    
-    public static void diagonalED(){
-    	for(int i=n; i>0; i--){
-	    	int[] diagonal=new int[i];
-	    	int x=0;
-			for(int j=i; x<i; j+=n-1){
-				diagonal[x]=j;	
-				x++;
-			}
-			addTodasClausulasDaLinha(diagonal, true);
-    	}
-    	
-    	
-    	int y=n-1;
-    	//Get the diagonals from the right side
-    	for(int i=n*2; i<n*n; i+=n){
-    		
-	    	int[] diagonal=new int[y];
-	    	int x=0;
-	    	//4,7,10,13.....3,6,9
-			for(int j=i; j<n*n; j+=n-1){
-				diagonal[x]=j;	
-				x++;
-			}
-			y--;
-			addTodasClausulasDaLinha(diagonal, true);
-    	}
-    }
-    
-    public static void addTodasClausulasDaLinha(int[] x, boolean diagonal) {
-    	if(x.length==1){
-    		//Ignora
-    	}
-    	else{
-    		if(!diagonal){
-    			
-    			String s=new String();
-    			for(int i=0; i<x.length; i++){
-    				s+=x[i]+" ";
-    			} 
-    			s+="0";
-    			formulas.add(s);
-    		}
-
-	    	for(int k=0; k<x.length; k++){
-				for(int l=k+1; l<x.length;l++){
-					formulas.add("-"+x[k]+" -"+x[l]+" 0");
-					par[0]=x[k] * -1;
-					par[1]=x[l] * -1;
+			appendClause(clause);
+			clause = "";
+			// construct statements of form (!x1 or !x2); (!x1 or !x3); (!x1 or !x2) etc.
+			for(int l=0; l<n; l++) {
+				for(int m=l+1; m<n; m++) {
+					clause += "-"+row[l]+" -"+row[m]+" ";
+					appendClause(clause);
+					clause = "";
 				}
 			}
-    	}
-    }
-    
-    public static void escreverArquivo() throws FileNotFoundException, UnsupportedEncodingException{
-		writer.println("p cnf "+n+" "+formulas.size());
 
-		for(int i=0;i<formulas.size();i++){
-			writer.println(formulas.get(i));
+			k = 0;
+		}
+	}
+	public static void generateColumnClauses() {
+		String clause = "";
+		int[] column = new int[n];
+		int k = 0;
+		for(int i=0; i<n; i++) {
+			// construct statement of form (x1 or x2 or... or xn)
+			for(int j=0; j<n; j++) {
+				column[k] = board[j][i];
+				clause += board[j][i] +" ";
+				k++;
+			}
+			appendClause(clause);
+			clause = "";
+			// construct statements of form (!x1 or !x2); (!x1 or !x3); (!x1 or !x2) etc.
+			for(int l=0; l<n; l++) {
+				for(int m=l+1; m<n; m++) {
+					clause += "-"+column[l]+" -"+column[m]+" ";
+					appendClause(clause);
+					clause = "";
+				}
+			}
+			k = 0;
+		}
+	}
+	public static void generateDiagonalClauses() {
+		String clause = "";
+		// bottom-up left right part
+		int[] diagonal = new int[n];
+		// index for diagonal
+		int k = 0;
+		int l = 0;
+		for(int i=1; i<n*2-2; i++) {
+			for(int j = 0; j<=i; j++) {
+				k = i - j;
+				if(k<n && j< n) {
+					diagonal[l] = board[k][j];
+					l++;
+				}
+			}
+			for(int p=0; p<l; p++) {
+				for(int q=p+1; q<l; q++) {
+					clause += "-"+diagonal[p]+" -"+diagonal[q]+" ";
+					appendClause(clause);
+					clause = "";
+				}
+			}
+			l = 0;
 		}
 
+		for(int i=n-2; i>=0; i--) {
+			for(int j = i+n-1; j>=0; j--) {
+				k = i + j;
+				if(k<n && j< n) {
+					diagonal[l] = board[k][j];
+					l++;
+				}
+		 }
+
+		for(int p=0; p<l; p++) {
+			for(int q=p+1; q<l; q++) {
+				clause += "-"+diagonal[p]+" -"+diagonal[q]+" ";
+				appendClause(clause);
+				clause = "";
+			}
+		}
+		l = 0;
+		}
+		int iter = 2;
+		int step = 1;
+		int i = 0;
+		int j = i+step;
+		while(iter>=2) {
+			iter = 0;
+			while(j<n) {
+					diagonal[l] = board[i][j];
+					j++;
+					i++;
+					iter++;
+					l++;
+			}
+			for(int p=0; p<l; p++) {
+				for(int q=p+1; q<l; q++) {
+					clause += "-"+diagonal[p]+" -"+diagonal[q]+" ";
+					appendClause(clause);
+					clause = "";
+				}
+			}
+			l = 0;
+			i = 0;
+			step++;
+			j = i+step;
+			if(j==n-1) break;
+		}
+	}
+	public static void appendClause(String clause) {
+		builder.append(clause);	
+		// AND
+		builder.append("0\n");
+		clauses++;
+	}
+	/**
+	 * Writes cnf to file.
+	 */
+	public static void cnfToFile()  {
+		PrintWriter writer = null;
+		try {
+			writer = new PrintWriter(cnfFileName, "UTF-8");
+		} catch (FileNotFoundException | UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		// adhere to cnf convension
+		writer.println("c logic in conjunctive normal form");
+		writer.println("c for n-queens problem, with n = "+n);
+		writer.println("p cnf "+variables+" "+clauses);
+		String[] cnfContent = builder.toString().split("\\n");
+		for(String clause:cnfContent) {
+			writer.println(clause);
+		}
 		writer.close();
-    }
-    
+	}
+	public static String getCnfFilename() {
+		return cnfFileName;
+	}
 }
